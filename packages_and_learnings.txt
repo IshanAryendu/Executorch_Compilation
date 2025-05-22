@@ -1,0 +1,37 @@
+conda install -c conda-forge flatbuffers
+executorch
+torch
+torchvision
+
+
+learnings:
+class FineTuningModule(nn.Module):
+    def __init__(self, base_model):
+        super(FineTuningModule, self).__init__()
+        self.base_model = base_model
+        
+        # Create a copy of the tunable parameters only (last layer in this case)
+        self.fine_tune_params = nn.ParameterDict()
+        for name, param in base_model.named_parameters():
+            if any(layer_name in name for layer_name in fine_tune_config['fine_tune_layers']):
+                # Replace dots with underscores to avoid KeyError
+                safe_name = name.replace('.', '_')
+                self.fine_tune_params[safe_name] = nn.Parameter(param.data.clone())
+        
+    def forward(self, x):
+        # Use base model for inference but with the fine-tuned parameters
+        with torch.no_grad():
+            x = self.base_model.features(x)
+            x = torch.flatten(x, 1)
+            
+            # For the classifier part, we need to use our fine-tuned parameters
+            x = self.base_model.classifier[0](x)  # Linear
+            x = self.base_model.classifier[1](x)  # ReLU
+            x = self.base_model.classifier[2](x)  # Dropout
+            
+            # Use the fine-tuned classifier.3 parameters (final layer)
+            weight = self.fine_tune_params['classifier_3_weight']
+            bias = self.fine_tune_params['classifier_3_bias']
+            x = torch.nn.functional.linear(x, weight, bias)
+        
+        return x

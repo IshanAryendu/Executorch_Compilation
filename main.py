@@ -224,15 +224,20 @@ def fine_tune_executorch_model(model_path, train_loader, val_loader, epochs=10, 
         for batch in tqdm(train_loader):
             inputs, labels = batch
 
-            # Forward pass
-            out = et_mod.forward((inputs, labels), clone_outputs=False)
-            loss = out[0]
-            epoch_loss += loss.item()
+            # Process each image-label pair individually
+            for i in range(len(inputs)):
+                input_image = inputs[i:i+1]  # Use list slicing to extract single image
+                label = labels[i:i+1]  # Use list slicing to extract single label
 
-            # Update parameters
-            with torch.no_grad():
-                for grad, param in zip(out[grad_start:param_start], out[param_start:]):
-                    param.sub_(learning_rate * grad)
+                # Forward pass
+                out = et_mod.forward((input_image, label), clone_outputs=False)
+                loss = out[0]
+                epoch_loss += loss.item()
+
+                # Update parameters
+                with torch.no_grad():
+                    for grad, param in zip(out[grad_start:param_start], out[param_start:]):
+                        param.sub_(learning_rate * grad)
 
         print(f"Epoch {epoch+1} Loss: {epoch_loss:.4f}")
 
@@ -244,12 +249,16 @@ def fine_tune_executorch_model(model_path, train_loader, val_loader, epochs=10, 
         with torch.no_grad():
             for batch in val_loader:
                 inputs, labels = batch
-                out = et_mod.forward((inputs, labels))
-                loss = out[0]
-                val_loss += loss.item()
-                predictions = out[1].argmax(dim=1)
-                total += labels.size(0)
-                correct += (predictions == labels).sum().item()
+                for i in range(len(inputs)):
+                    input_image = inputs[i:i+1]  # Use list slicing to extract single image
+                    label = labels[i:i+1]  # Use list slicing to extract single label
+
+                    out = et_mod.forward((input_image, label))
+                    loss = out[0]
+                    val_loss += loss.item()
+                    predictions = out[1].argmax(dim=1)
+                    total += label.size(0)
+                    correct += (predictions == label).sum().item()
 
         val_accuracy = 100 * correct / total
         print(f"Validation Loss: {val_loss:.4f}, Accuracy: {val_accuracy:.2f}%")
